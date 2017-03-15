@@ -1,8 +1,7 @@
 (ns deathrider.point)
 
-(defrecord ^:private Point
-  [^int x
-   ^int y])
+(defrecord Point
+  [x y])
 
 (defn new-point [x y]
   (->Point x y))
