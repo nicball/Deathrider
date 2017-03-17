@@ -7,6 +7,9 @@
 (defn new-gameboard [players]
   (->GameBoard players))
 
+(defn gameboard-players [gb]
+  (:players gb))
+
 (defn collide [gb]
   (new-gameboard
     (for [p (:players gb)]

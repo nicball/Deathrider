@@ -2,10 +2,18 @@
   (:use deathrider.point))
 
 (defrecord Player
-  [id status track])
+  [^byte id
+   status
+   track])
 
 (defn player-id [p]
   (:id p))
+
+(defn player-status [p]
+  (:status p))
+
+(defn player-track [p]
+  (:track p))
 
 (defn alive? [player] 
   (= (:status player) :alive))
