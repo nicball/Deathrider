@@ -1,6 +1,7 @@
 (ns deathrider.socket
   (:require [clojure.core.async :as async])
   (:import [java.nio.channels
+              AsynchronousSocketChannel
               AsynchronousServerSocketChannel
               InetSocketAddress
               CompletionHandler]
@@ -17,6 +18,15 @@
   (reify CompletionHandler
     (completed [this res data] (succ this res data))
     (failed [this e data] (fail this e data))))
+
+(defn go-connect [addr port]
+  (let [ch (async/chan)
+        sock (AsynchronousSocketChannel/open)]
+    (.connect sock (InetSocketAddress. addr port) nil
+              (completion-handler
+                #(async/put! ch sock)
+                #(println (.getMessage %2))))
+    ch))
 
 (defn go-accept [s]
   (let [ch (async/chan)]
@@ -53,4 +63,4 @@
                   (async/close! ch)))
               #(println (.getMessage %2))))
     ch))
-  
+
