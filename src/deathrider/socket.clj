@@ -56,13 +56,16 @@
   (let [ch (async/chan)]
     (go-loop []
       (let [byte (async/<! ch)
-            buf (ByteBuffer/wrap (byte-array [byte]))]
+            buf (ByteBuffer/wrap (byte-array [byte]))
+            done (async/chan)]
         (.write s buf nil
                 (completion-handler
                   (fn [this _ _]
-                    (when (.hasRemaining buf)
-                      (.write s buf nil this)))
+                    (if (.hasRemaining buf)
+                      (.write s buf nil this)
+                      (async/>! done true)))
                   #(println (.getMessage %2))))
+        (async/<! done)
         (recur)))
     ch))
 
