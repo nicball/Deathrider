@@ -52,15 +52,17 @@
              #(println (.getMessage %2))))
     ch))
 
-(defn go-send [s data]
-  (let [ch (async/chan)
-        buf (ByteBuffer/wrap data)]
-    (.write s buf nil
-            (completion-handler
-              (fn [this _ _]
-                (if (.hasRemaining buf)
-                  (.write s buf nil this)
-                  (async/close! ch)))
-              #(println (.getMessage %2))))
+(defn go-send [s]
+  (let [ch (async/chan)]
+    (go-loop []
+      (let [byte (async/<! ch)
+            buf (ByteBuffer/wrap (byte-array [byte]))]
+        (.write s buf nil
+                (completion-handler
+                  (fn [this _ _]
+                    (when (.hasRemaining buf)
+                      (.write s buf nil this)))
+                  #(println (.getMessage %2))))
+        (recur)))
     ch))
 
