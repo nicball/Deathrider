@@ -1,9 +1,9 @@
 (ns deathrider.socket
-  (:require [clojure.core.async :as async])
-  (:import [java.nio.channels
+  (:use [clojure.core.async :only [go go-loop chan put! <! >! >!! close!]])
+  (:import [java.net InetSocketAddress]
+           [java.nio.channels
               AsynchronousSocketChannel
               AsynchronousServerSocketChannel
-              InetSocketAddress
               CompletionHandler]
            [java.nio ByteBuffer]))
 
@@ -19,70 +19,79 @@
     (completed [this res data] (succ this res data))
     (failed [this e data] (fail this e data))))
 
-(defn connect [addr port]
-  (let [ch (async/chan)
+(defn- print-error-and-close [ch]
+  (fn [_ ^Throwable e _]
+    (println (.getMessage e))
+    (close! ch)))
+
+(defn connect [^String addr ^long port]
+  (let [ch (chan)
         sock (AsynchronousSocketChannel/open)]
     (.connect sock (InetSocketAddress. addr port) nil
               (completion-handler
-                #(async/onto-chan ch [sock])
-                #(println (.getMessage %2))))
+                (fn [_ _ _]
+                  (put! ch sock)
+                  (close! ch))
+                (print-error-and-close ch)))
     ch))
 
-(defn accept-chan [s]
-  (let [ch (async/chan)]
+(defn accept-chan [^AsynchronousServerSocketChannel s]
+  (let [ch (chan)]
     (.accept s nil
              (completion-handler
                (fn [this conn _]
                  (.accept s nil this)
-                 (async/put! ch conn))
-               #(println (.getMessage %2))))
+                 (put! ch conn))
+               (print-error-and-close ch)))
     ch))
 
-(defn receive-chan [s]
-  (let [ch (async/chan)
+(defn receive-chan [^AsynchronousSocketChannel s]
+  (let [ch (chan)
         arr (byte-array BUFFER_SIZE)
         buf (ByteBuffer/wrap arr)]
     (.read s buf nil
            (completion-handler
              (fn [this n _]
                (if (== -1 n)
-                 (async/close! ch)
+                 (close! ch)
                  (do
-                   (async/onto-chan ch (take n arr) false)
+                   (doseq [b (take n arr)]
+                     (>!! ch b))
                    (.clear buf)
                    (.read s buf nil this))))
-             #(println (.getMessage %2))))
+             (print-error-and-close ch)))
     ch))
 
-(defn- write-and-clear-buffer [s buf]
-  (let [done (async/chan)]
+(defn- write-buffer [^AsynchronousSocketChannel s ^ByteBuffer buf]
+  (let [done (chan)]
     (.write s buf nil
             (completion-handler
               (fn [this _ _]
                 (if (.hasRemaining buf)
                   (.write s buf nil this)
-                  (do
-                    (async/close! done)
-                    (.clear buf))))
-              #(println (.getMessage %2))))
+                  (close! done)))
+              (fn [this e _]
+                (>!! done e)
+                (close! done))))
     done))
 
 (defn send-chan [s]
-  (let [ch (async/chan)
+  (let [ch (chan)
         arr (byte-array BUFFER_SIZE)
         buf (ByteBuffer/wrap arr)]
     (go-loop []
-      (when-let [msg (async/<! ch)]
+      (when-let [msg (<! ch)]
         (if (or (= :end-of-message msg)
                 (not (.hasRemaining buf)))
-          (async/<! (write-and-clear-buffer s buf))
-          (.put buf msg))
-        (recur)))
+          (if-let [^Throwable e (<! (write-buffer s (ByteBuffer/wrap arr 0 (.position buf))))]
+            (do (println (.getMessage e)) (close! ch))
+            (recur))
+          (do (.put buf (byte msg)) (recur)))))
     ch))
 
-(defn flush! [s]
-  (async/>! s :end-of-message))
+(defn flush-conn [s]
+  (put! s :end-of-message))
 
-(defn close [s]
+(defn close [^AsynchronousSocketChannel s]
   (.close s))
 

@@ -9,4 +9,5 @@
                  [org.clojure/core.async "0.3.442"]]
   :main ^:skip-aot deathrider.core
   :target-path "target/%s"
+  :global-vars {*warn-on-reflection* true}
   :profiles {:uberjar {:aot :all}})
