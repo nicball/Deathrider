@@ -83,3 +83,6 @@
 (defn flush! [s]
   (async/>! s :end-of-message))
 
+(defn close [s]
+  (.close s))
+
