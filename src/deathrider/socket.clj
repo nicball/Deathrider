@@ -9,7 +9,7 @@
 
 (def ^{:private true :const true} BUFFER_SIZE 8192)
 
-(defn listen [port]
+(defn listen-sync [port]
   (let [chan (AsynchronousServerSocketChannel/open)]
     (.bind chan (InetSocketAddress. port))
     chan))
@@ -19,16 +19,16 @@
     (completed [this res data] (succ this res data))
     (failed [this e data] (fail this e data))))
 
-(defn go-connect [addr port]
+(defn connect [addr port]
   (let [ch (async/chan)
         sock (AsynchronousSocketChannel/open)]
     (.connect sock (InetSocketAddress. addr port) nil
               (completion-handler
-                #(async/put! ch sock)
+                #(async/onto-chan ch [sock])
                 #(println (.getMessage %2))))
     ch))
 
-(defn go-accept [s]
+(defn accept [s]
   (let [ch (async/chan)]
     (.accept s nil
              (completion-handler
@@ -38,34 +38,48 @@
                #(println (.getMessage %2))))
     ch))
 
-(defn go-receive [s]
+(defn receive-chan [s]
   (let [ch (async/chan)
-        arr (byte-array BUFFER_SIZE)]
-    (.read s (ByteBuffer/wrap arr) nil
+        arr (byte-array BUFFER_SIZE)
+        buf (ByteBuffer/wrap arr)]
+    (.read s buf nil
            (completion-handler
              (fn [this n _]
                (if (== -1 n)
                  (async/close! ch)
                  (do
-                   (async/onto-chan ch (take n arr))
-                   (.read s (ByteBuffer/wrap arr) nil this))))
+                   (async/onto-chan ch (take n arr) false)
+                   (.clear buf)
+                   (.read s buf nil this))))
              #(println (.getMessage %2))))
     ch))
 
-(defn go-send [s]
-  (let [ch (async/chan)]
+(defn- write-and-clear-buffer [s buf]
+  (let [done (async/chan)]
+    (.write s buf nil
+            (completion-handler
+              (fn [this _ _]
+                (if (.hasRemaining buf)
+                  (.write s buf nil this)
+                  (do
+                    (async/close! done)
+                    (.clear buf))))
+              #(println (.getMessage %2))))
+    done))
+
+(defn send-chan [s]
+  (let [ch (async/chan)
+        arr (byte-array BUFFER_SIZE)
+        buf (ByteBuffer/wrap arr)]
     (go-loop []
-      (let [byte (async/<! ch)
-            buf (ByteBuffer/wrap (byte-array [byte]))
-            done (async/chan)]
-        (.write s buf nil
-                (completion-handler
-                  (fn [this _ _]
-                    (if (.hasRemaining buf)
-                      (.write s buf nil this)
-                      (async/>! done true)))
-                  #(println (.getMessage %2))))
-        (async/<! done)
+      (when-let [msg (async/<! ch)]
+        (if (or (= :end-of-message msg)
+                (not (.hasRemaining buf)))
+          (async/<! (write-and-clear-buffer s buf))
+          (.put buf msg))
         (recur)))
     ch))
+
+(defn flush! [s]
+  (async/>! s :end-of-message))
 
