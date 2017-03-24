@@ -56,15 +56,16 @@
          res#))))
 
 (defmacro receive-byte! [s]
-  `(let [ch# (chan)
+  `(let [s# ~s
+         ch# (chan)
          arr# (byte-array 1)
          buf# (ByteBuffer/wrap arr)]
-     (.read ~s buf# nil
+     (.read s# buf# nil
             (completion-handler
               (fn [this# n# _]
                 (cond
                   (== -1 n#) (put! ch# :end-of-stream)
-                  (.hasRemaining buf#) (.read ~s buf# this#)
+                  (.hasRemaining buf#) (.read s# buf# this#)
                   true (put! ch# (aget arr 0))))
               (fn [_ e# _] (put! ch# e#))))
      (let [res# (<! ch#)]
@@ -85,13 +86,14 @@
          res#))))
 
 (defmacro send-all! [s arr]
-  `(let [ch# (chan)
+  `(let [s# ~s
+         ch# (chan)
          buf# (ByteBuffer/wrap ~arr)]
-     (.write ~s buf# nil
+     (.write s# buf# nil
              (completion-handler
                (fn [this# _ _]
                  (if (.hasRemaining buf#)
-                   (.write ~s buf# nil this#)
+                   (.write s# buf# nil this#)
                    (close! ch#)))
                (fn [_ e# _]
                  (put! ch# e#))))
