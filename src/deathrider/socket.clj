@@ -22,7 +22,7 @@
 (defmacro connect! [addr port]
   `(let [ch# (chan)
          sock# (AsynchronousSocketChannel/open)]
-     (.connect sock# (InetSocketAddress. @addr @port) nil
+     (.connect sock# (InetSocketAddress. ~addr ~port) nil
                (completion-handler
                  (fn [_ _ _] (close! ch#))
                  (fn [_ e# _]
@@ -34,7 +34,7 @@
 
 (defmacro accept! [s]
   `(let [ch# (chan)]
-     (.accept @s nil
+     (.accept ~s nil
               (completion-handler
                 (fn [_ conn# _] (put! ch# conn#))
                 (fn [_ e# _] (put! ch# e#))))
@@ -45,8 +45,8 @@
 
 (defmacro receive! [s arr]
   `(let [ch# (chan)
-         buf# (ByteBuffer/wrap @arr)]
-     (.read @s buf# nil
+         buf# (ByteBuffer/wrap ~arr)]
+     (.read ~s buf# nil
             (completion-handler
               (fn [_ n# _] (put! ch# n#))
               (fn [_ e# _] (put! ch# e#))))
@@ -59,12 +59,12 @@
   `(let [ch# (chan)
          arr# (byte-array 1)
          buf# (ByteBuffer/wrap arr)]
-     (.read @s buf# nil
+     (.read ~s buf# nil
             (completion-handler
               (fn [this# n# _]
                 (cond
                   (== -1 n#) (put! ch# :end-of-stream)
-                  (.hasRemaining buf#) (.read @s buf# this#)
+                  (.hasRemaining buf#) (.read ~s buf# this#)
                   true (put! ch# (aget arr 0))))
               (fn [_ e# _] (put! ch# e#))))
      (let [res# (<! ch#)]
@@ -74,8 +74,8 @@
 
 (defmacro send! [s arr offset length]
   `(let [ch# (chan)
-         buf# (ByteBuffer/wrap @arr @offset @length)]
-     (.write @s buf# nil
+         buf# (ByteBuffer/wrap ~arr ~offset ~length)]
+     (.write ~s buf# nil
              (completion-handler
                (fn [_ n# _] (put! ch# n#))
                (fn [_ e# _] (put! ch# e#))))
@@ -86,12 +86,12 @@
 
 (defmacro send-all! [s arr]
   `(let [ch# (chan)
-         buf# (ByteBuffer/wrap @arr)]
-     (.write @s buf# nil
+         buf# (ByteBuffer/wrap ~arr)]
+     (.write ~s buf# nil
              (completion-handler
                (fn [this# _ _]
                  (if (.hasRemaining buf#)
-                   (.write @s buf# nil this#)
+                   (.write ~s buf# nil this#)
                    (close! ch#)))
                (fn [_ e# _]
                  (put! ch# e#))))
@@ -99,7 +99,7 @@
        (throw error#))))
 
 (defmacro send-byte! [s b]
-  `(send-all! @s (byte-array [@b])))
+  `(send-all! ~s (byte-array [~b])))
 
 (defn close [^AsynchronousSocketChannel s]
   (.close s))
