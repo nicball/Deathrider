@@ -55,6 +55,23 @@
          (throw res#)
          res#))))
 
+(defmacro receive-byte! [s]
+  `(let [ch# (chan)
+         arr# (byte-array 1)
+         buf# (ByteBuffer/wrap arr)]
+     (.read @s buf# nil
+            (completion-handler
+              (fn [this# n# _]
+                (cond
+                  (== -1 n#) (put! ch# :end-of-stream)
+                  (.hasRemaining buf#) (.read @s buf# this#)
+                  true (put! ch# (aget arr 0))))
+              (fn [_ e# _] (put! ch# e#))))
+     (let [res# (<! ch#)]
+       (if (instance? Throwable res#)
+         (throw res#)
+         res#))))
+
 (defmacro send! [s arr offset length]
   `(let [ch# (chan)
          buf# (ByteBuffer/wrap @arr @offset @length)]
@@ -66,6 +83,20 @@
        (if (instance? Throwable res#)
          (throw res#)
          res#))))
+
+(defmacro send-all! [s arr]
+  `(let [ch# (chan)
+         buf# (ByteBuffer/wrap @arr)]
+     (.write @s buf# nil
+             (completion-handler
+               (fn [this# _ _]
+                 (if (.hasRemaining buf#)
+                   (.write @s buf# nil this#)
+                   (close! ch#)))
+               (fn [_ e# _]
+                 (put! ch# e#))))
+     (when-let [error# (<! ch#)]
+       (throw error#))))
 
 (defn close [^AsynchronousSocketChannel s]
   (.close s))
