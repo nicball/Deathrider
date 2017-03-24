@@ -14,7 +14,7 @@
     (.bind chan (InetSocketAddress. port))
     chan))
 
-(defn- completion-handler [succ fail]
+(defn completion-handler [succ fail]
   (reify CompletionHandler
     (completed [this res data] (succ this res data))
     (failed [this e data] (fail this e data))))
