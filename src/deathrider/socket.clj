@@ -7,7 +7,7 @@
               CompletionHandler]
            [java.nio ByteBuffer]))
 
-(def ^{:private true :const true} BUFFER_SIZE 8192)
+(def ^{:private true :const true} BUFFER_#SIZE 8192)
 
 (defn listen [port]
   (let [chan (AsynchronousServerSocketChannel/open)]
@@ -24,11 +24,11 @@
          sock# (AsynchronousSocketChannel/open)]
      (.connect sock# (InetSocketAddress. ~addr ~port) nil
                (completion-handler
-                 (fn [_ _ _] (close! ch#))
-                 (fn [_ e# _]
+                 (fn [_1# _2# _3#] (close! ch#))
+                 (fn [_1# e# _3#]
                    (put! ch# e#)
                    (close! ch#))))
-     (if-let [error# (<! ch)]
+     (if-let [error# (<! ch#)]
        (throw error#)
        sock#)))
 
@@ -36,9 +36,9 @@
   `(let [ch# (chan)]
      (.accept ~s nil
               (completion-handler
-                (fn [_ conn# _] (put! ch# conn#))
-                (fn [_ e# _] (put! ch# e#))))
-     (let [res# (<! ch)]
+                (fn [_1# conn# _3#] (put! ch# conn#))
+                (fn [_1# e# _3#] (put! ch# e#))))
+     (let [res# (<! ch#)]
        (if (instance? Throwable res#)
          (throw res#)
          res#))))
@@ -48,8 +48,8 @@
          buf# (ByteBuffer/wrap ~arr)]
      (.read ~s buf# nil
             (completion-handler
-              (fn [_ n# _] (put! ch# n#))
-              (fn [_ e# _] (put! ch# e#))))
+              (fn [_1# n# _3#] (put! ch# n#))
+              (fn [_1# e# _3#] (put! ch# e#))))
      (let [res# (<! ch#)]
        (if (instance? Throwable res#)
          (throw res#)
@@ -62,12 +62,12 @@
          buf# (ByteBuffer/wrap arr)]
      (.read s# buf# nil
             (completion-handler
-              (fn [this# n# _]
+              (fn [this# n# _3#]
                 (cond
                   (== -1 n#) (put! ch# :end-of-stream)
                   (.hasRemaining buf#) (.read s# buf# this#)
                   true (put! ch# (aget arr 0))))
-              (fn [_ e# _] (put! ch# e#))))
+              (fn [_1# e# _3#] (put! ch# e#))))
      (let [res# (<! ch#)]
        (if (instance? Throwable res#)
          (throw res#)
@@ -78,8 +78,8 @@
          buf# (ByteBuffer/wrap ~arr ~offset ~length)]
      (.write ~s buf# nil
              (completion-handler
-               (fn [_ n# _] (put! ch# n#))
-               (fn [_ e# _] (put! ch# e#))))
+               (fn [_1# n# _3#] (put! ch# n#))
+               (fn [_1# e# _3#] (put! ch# e#))))
      (let [res# (<! ch#)]
        (if (instance? Throwable res#)
          (throw res#)
@@ -91,11 +91,11 @@
          buf# (ByteBuffer/wrap ~arr)]
      (.write s# buf# nil
              (completion-handler
-               (fn [this# _ _]
+               (fn [this# _2# _3#]
                  (if (.hasRemaining buf#)
                    (.write s# buf# nil this#)
                    (close! ch#)))
-               (fn [_ e# _]
+               (fn [_1# e# _3#]
                  (put! ch# e#))))
      (when-let [error# (<! ch#)]
        (throw error#))))
