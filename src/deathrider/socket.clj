@@ -28,7 +28,7 @@
                 #(println (.getMessage %2))))
     ch))
 
-(defn accept [s]
+(defn accept-chan [s]
   (let [ch (async/chan)]
     (.accept s nil
              (completion-handler
