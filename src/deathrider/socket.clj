@@ -98,6 +98,9 @@
      (when-let [error# (<! ch#)]
        (throw error#))))
 
+(defmacro send-byte! [s b]
+  `(send-all! @s (byte-array [@b])))
+
 (defn close [^AsynchronousSocketChannel s]
   (.close s))
 
