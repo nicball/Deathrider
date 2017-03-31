@@ -4,4 +4,4 @@
 
 (defn -main
   [& args]
-  (start-server 46666))
+  (start-server))

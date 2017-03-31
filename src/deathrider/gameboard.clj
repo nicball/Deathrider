@@ -25,5 +25,10 @@
         (ride p (get moves (player-id p)))
         p))))
 
+(defn mark-dead [gb id]
+  (new-gameboard
+    (map (fn [p] (if (alive? p) (die p) p))
+         (:players gb))))
+
 (defn step [gb moves]
   (-> gb (advance moves) collide))
