@@ -2,19 +2,28 @@
   (use deathrider.player))
 
 (defrecord GameBoard
-  [players])
+  [players width height])
 
-(defn new-gameboard [players]
-  (->GameBoard players))
+(defn new-gameboard [players width height]
+  (->GameBoard players width height))
 
 (defn gameboard-players [gb]
   (:players gb))
+
+(defn- out-of-border? [p gb]
+  (let [h (player-head p)
+        x (point-x h) y (point-y h)
+        x-max (/ (:width gb) 2)
+        y-max (/ (:height gb) 2)]
+    (or (> (Math/abs x) x-max)
+        (> (Math/abs y) y-max))))
 
 (defn collide [gb]
   (new-gameboard
     (for [p (:players gb)]
       (if (and (alive? p)
-               (some #(hitting? p %) (:players gb)))
+               (or (some #(hitting? p %) (:players gb))
+                   (out-of-border? p gb)))
         (die p)
         p))))
 

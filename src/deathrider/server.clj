@@ -1,9 +1,7 @@
 (ns deathrider.server
-  (:use [deathrider message gameboard player point]
+  (:use [deathrider message gameboard player point config]
         [clojure.core.async :only [thread <!! >!! alts!! timeout]])
   (:import [java.net ServerSocket]))
-
-(def ^:private GAMEBOARD_SIZE 10)
 
 (defn- rand-pos []
   (new-point (- (rand-int GAMEBOARD_SIZE) (/ GAMEBOARD_SIZE 2))
@@ -12,8 +10,7 @@
 (defn- gen-player [id]
   (new-player id (rand-pos) (rand-nth [:up :down :left :right])))
 
-(def ^:private UPDATE_INTERVAL_MS (/ 1000 2))
-
+(def ^:private UPDATE_INTERVAL_MS (/ 1000 SNAPSHOT_PER_SEC))
 (defn serve [socks]
   (let [len (count socks)
         outs (doall (map get-data-output-stream socks))
@@ -42,11 +39,8 @@
                  gb
                  to))))))
 
-(def ^:private ROOM_SIZE 2)
-(def PORT 46666)
-
 (defn start-server []
-  (let [lsn (ServerSocket. PORT)]
+  (let [lsn (ServerSocket. SERVER_PORT)]
     (loop []
       (let [socks (doall (repeatedly ROOM_SIZE (fn [] (.accept lsn))))]
         (try (serve socks)

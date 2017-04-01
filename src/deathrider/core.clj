@@ -1,7 +1,9 @@
 (ns deathrider.core
   (:gen-class)
-  (:use [deathrider server]))
+  (:use [deathrider server client]))
 
 (defn -main
   [& args]
-  (start-server))
+  (if (seq args)
+    (start-server)
+    (start-client)))

@@ -15,6 +15,9 @@
 (defn player-track [p]
   (:track p))
 
+(defn player-head [p]
+  (first (:track p)))
+
 (defn alive? [player] 
   (= (:status player) :alive))
 
