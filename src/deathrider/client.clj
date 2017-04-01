@@ -7,12 +7,12 @@
 (def ^:private UNIT_SIZE (/ CANVAS_SIZE (inc GAMEBOARD_SIZE)))
 
 (defn- new-canvas []
-  (let [cv (canvas :background :black :paint nil)
+  (let [cv (canvas :background :black :paint nil
+                   :size [CANVAS_SIZE :by CANVAS_SIZE])
         fr (frame :title "deathrider"
-                  :width CANVAS_SIZE :height CANVAS_SIZE
                   :content cv
                   :on-close :exit)]
-    (-> fr show! invoke-later)
+    (-> fr pack! show! invoke-later)
     cv))
 
 (def ^:private color-map
@@ -32,12 +32,16 @@
 
 (defn- to-screen-coord [p]
   (let [x (point-x p) y (point-y p)]
-    (new-point (* UNIT_SIZE (+ x 1 (/ GAMEBOARD_SIZE 2)))
-               (* UNIT_SIZE (- (+ y 1 (/ GAMEBOARD_SIZE 2)))))))
+    (new-point (* UNIT_SIZE (+ 1 x (long (/ GAMEBOARD_SIZE 2))))
+               (* UNIT_SIZE (+ 1 (- y) (long (/ GAMEBOARD_SIZE 2)))))))
 
 (defn- paint-player [g player]
   (let [cl (get color-map (player-id player) :green)
         track (map to-screen-coord (player-track player))]
+    (draw g (circle (point-x (first track))
+                    (point-y (first track))
+                    10)
+            (style :foreground cl :background cl))
     (doseq [[start end] (map vector track (rest track))]
       (draw g
         (line (point-x start) (point-y start)

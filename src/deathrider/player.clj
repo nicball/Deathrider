@@ -2,7 +2,7 @@
   (:use deathrider.point))
 
 (defrecord Player
-  [^byte id
+  [id
    status
    track])
 
