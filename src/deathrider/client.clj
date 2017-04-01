@@ -11,6 +11,7 @@
                    :size [CANVAS_SIZE :by CANVAS_SIZE])
         fr (frame :title "deathrider"
                   :content cv
+                  :resizeable? false
                   :on-close :exit)]
     (-> fr pack! show! invoke-later)
     cv))
