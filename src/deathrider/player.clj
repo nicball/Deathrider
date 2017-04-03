@@ -1,11 +1,6 @@
 (ns deathrider.player
   (:use deathrider.point))
 
-(defrecord Player
-  [id
-   status
-   track])
-
 (defn player-id [p]
   (:id p))
 
@@ -23,7 +18,7 @@
 
 (declare ride)
 (defn new-player [id pos dir]
-  (ride (->Player id :alive (list pos)) dir))
+  (ride {:id id :status :alive :track (list pos)} dir))
 
 (defn- heading [player]
   (let [head (first (:track player))

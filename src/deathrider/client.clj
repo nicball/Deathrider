@@ -1,26 +1,29 @@
 (ns deathrider.client
   (:use [seesaw core graphics]
-        [deathrider config gameboard player point]))
+        [deathrider config gameboard player point message])
+  (:import [java.net Socket]
+           [java.awt.event KeyEvent]))
 
-(def ^:private SERVER_HOSTNAME "deathrider.ml")
+(def ^{:private true :tag String} SERVER_HOSTNAME "localhost")
 (def ^:private CANVAS_SIZE 500)
 (def ^:private UNIT_SIZE (/ CANVAS_SIZE (inc GAMEBOARD_SIZE)))
 
+(defn- welcome-painter [_ g]
+  (draw g (string-shape 5 5 "正在连接服务器")
+          (style :foreground :white)))
+
 (defn- new-canvas []
-  (let [cv (canvas :background :black :paint nil
+  (let [cv (canvas :background :black :paint welcome-painter
                    :size [CANVAS_SIZE :by CANVAS_SIZE])
         fr (frame :title "deathrider"
                   :content cv
-                  :resizable? false
+                  ;;:resizable? false
                   :on-close :exit)]
     (-> fr pack! show! invoke-later)
     cv))
 
 (def ^:private color-map
   [:lime :red :aqua :yellow :blue :fuchsia :teal :green])
-
-(defn- paint [cv f]
-  (config! cv :paint f))
 
 (defn- paint-background [g]
   (dotimes [i GAMEBOARD_SIZE]
@@ -49,14 +52,39 @@
               (point-x end) (point-y end))
         (style :foreground cl :stroke 5)))))
 
+(defn- painter [players]
+  (fn [_ g]
+    (paint-background g)
+    (dorun (map #(paint-player g %) players))))
+
+(defn- reflect-snapshots [is cv]
+  (loop []
+    (let [ss (read-object is)]
+      (println ss)
+      (config! cv :paint (painter (snapshot-players ss)))
+      (repaint! cv)
+      (recur))))
+
 (defn start-client []
-  (let [cv (new-canvas)
-        gb (new-gameboard [(new-player 0 (new-point -5 0) :right)
-                           (new-player 1 (new-point 5 0) :left)]
-                          GAMEBOARD_SIZE
-                          GAMEBOARD_SIZE)
-        gb (last (take 4 (iterate #(step % {}) gb)))]
-    (paint cv (fn [_ g]
-                (paint-background g)
-                (doall (map (partial paint-player g)
-                            (gameboard-players gb)))))))
+  (let [cv (new-canvas)]
+    (try
+      (let [sock (Socket. SERVER_HOSTNAME SERVER_PORT)
+            is (get-data-input-stream sock)
+            os (get-data-output-stream sock)
+            id (read-int is)]
+        (listen (to-root cv) :key-pressed
+          (fn [^KeyEvent e]
+            (when-let [dir
+                       (condp = (.getKeyCode e)
+                         KeyEvent/VK_UP :up
+                         KeyEvent/VK_DOWN :down
+                         KeyEvent/VK_LEFT :left
+                         KeyEvent/VK_RIGHT :right
+                         nil)]
+              (write-object os (new-turn-usercmd id dir))
+              (flush-os os))))
+        (reflect-snapshots is cv))
+      (catch java.io.IOException e
+        (do
+          (dispose! (to-root cv))
+          (.printStackTrace e))))))

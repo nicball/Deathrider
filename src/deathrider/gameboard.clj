@@ -1,14 +1,13 @@
 (ns deathrider.gameboard
   (:use [deathrider player point]))
 
-(defrecord GameBoard
-  [players width height])
-
 (defn new-gameboard [players width height]
-  (->GameBoard players width height))
+  {:players players
+   :width width
+   :height height})
 
 (defn with-players [gb players]
-  (->GameBoard players (:width gb) (:height gb)))
+  (new-gameboard players (:width gb) (:height gb)))
 
 (defn gameboard-players [gb]
   (:players gb))

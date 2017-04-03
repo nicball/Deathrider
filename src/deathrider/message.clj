@@ -9,8 +9,8 @@
                     IOException]
            [java.net Socket]))
 
-(defrecord UserCommand
-  [player-id type data])
+(defn- new-usercmd [id ty data]
+  {:player-id id :type ty :data data})
 
 (defn usercmd-player-id [e] (:player-id e))
 
@@ -18,34 +18,17 @@
 
 (defn new-turn-usercmd
   [id dir]
-  (->UserCommand id :turn dir))
+  (new-usercmd id :turn dir))
 
 (defn turn-dir [e]
   (assert (= :turn (:type e)))
   (:data e))
 
 (defn new-quit-usercmd [id]
-  (->UserCommand id :quit nil))
-
-(defrecord Reply
-  [type data])
-
-(defn new-welcome-reply [id pos]
-  (->Reply :welcome [id pos]))
-
-(defn welcome-id [r]
-  (assert (= :welcome (:type r)))
-  (first (:data r)))
-
-(defn welcome-pos [r]
-  (assert (= :welcome (:type r)))
-  (second (:data r)))
-
-(defrecord Snapshot
-  [players])
+  (new-usercmd id :quit nil))
 
 (defn new-snapshot [players]
-  (->Snapshot players))
+  {:players players})
 
 (defn snapshot-players [s]
   (:players s))
@@ -92,7 +75,7 @@
 (defn send-snapshot [outs gb]
   (doseq [p (gameboard-players gb)]
     (doto (nth outs (player-id p))
-      (write-object (gameboard-players gb))
+      (write-object (new-snapshot (gameboard-players gb)))
       flush-os)))
 
 (defn close-socket [^Socket s]

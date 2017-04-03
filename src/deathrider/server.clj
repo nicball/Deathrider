@@ -15,7 +15,10 @@
   (let [len (count socks)
         outs (doall (map get-data-output-stream socks))
         ins (doall (map get-data-input-stream socks))
-        gb (new-gameboard (map gen-player (range len)))]
+        gb (collide (new-gameboard (map gen-player (range len))
+                                   GAMEBOARD_SIZE
+                                   GAMEBOARD_SIZE))]
+    (println gb)
 
     (dotimes [i len]
       (write-int (nth outs i) i)
@@ -24,7 +27,10 @@
     (loop [moves {}
            gb gb
            to (timeout UPDATE_INTERVAL_MS)]
-      (let [chs (vec (conj (map #(thread (read-usercmd %)) ins) to))
+      (let [chs (vec (conj (map #(thread (read-usercmd %1 %2))
+                                ins
+                                (range len))
+                           to))
             [val _] (alts!! chs :priority true)]
         (cond
           (nil? val)
@@ -42,7 +48,9 @@
 (defn start-server []
   (let [lsn (ServerSocket. SERVER_PORT)]
     (loop []
-      (let [socks (doall (repeatedly ROOM_SIZE (fn [] (.accept lsn))))]
-        (try (serve socks)
-          (finally (doall (map close-socket socks))))))))
-
+      (let [socks (doall (repeatedly ROOM_SIZE #(.accept lsn)))]
+        (future
+          (try (serve socks)
+            (catch Throwable e (.printStackTrace e))
+            (finally (dorun (map close-socket socks)))))
+        (recur)))))
