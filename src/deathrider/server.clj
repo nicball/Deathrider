@@ -3,12 +3,15 @@
         [clojure.core.async :only [thread <!! >!! alts!! timeout]])
   (:import [java.net ServerSocket]))
 
-(defn- rand-pos []
-  (new-point (- (rand-int GAMEBOARD_SIZE) (/ GAMEBOARD_SIZE 2))
-             (- (rand-int GAMEBOARD_SIZE) (/ GAMEBOARD_SIZE 2))))
+(defn- rotate-point [p]
+  (new-point (point-y p) (- (point-x p))))
 
 (defn- gen-player [id]
-  (new-player id (rand-pos) (rand-nth [:up :down :left :right])))
+  (let [x (- (rand-int (/ GAMEBOARD_SIZE 2)) (/ GAMEBOARD_SIZE 4))
+        p (new-point x (- (/ GAMEBOARD_SIZE 2)))
+        [pos dir] (rand-nth (map vector (iterate rotate-point p)
+                                        [:up :right :down :left]))]
+    (new-player id pos dir)))
 
 (def ^:private UPDATE_INTERVAL_MS (/ 1000 SNAPSHOT_PER_SEC))
 (defn serve [socks]
@@ -32,10 +35,13 @@
                                 (range len))
                            to))
             [val _] (alts!! chs :priority true)]
+        (println "Received: " val)
+        (println "Moves: " moves)
         (cond
           (nil? val)
-          (do (send-snapshot outs gb) 
-              (recur {} (step gb moves) (timeout UPDATE_INTERVAL_MS)))
+          (let [new-gb (step gb moves)]
+            (send-snapshot outs new-gb) 
+            (recur {} new-gb (timeout UPDATE_INTERVAL_MS)))
 
           (= :quit (usercmd-type val))
           (recur moves (mark-dead gb (usercmd-player-id val)) to)

@@ -39,13 +39,8 @@
 (defn get-data-input-stream [^Socket s]
   (DataInputStream. (.getInputStream s)))
 
-(defn read-all [^InputStream is ^bytes arr]
-  (loop [pos 0]
-    (when-not (== pos (alength arr))
-      (let [n (.read is arr pos (- (alength arr) pos))]
-        (if (== -1 n)
-          (throw (java.io.IOException. "deathrider.server/read-all: not enough data."))
-          (recur (+ pos n)))))))
+(defn read-fully [^DataInputStream is ^bytes arr]
+  (.readFully is arr))
 
 (defn read-int [^DataInputStream is]
   (.readInt is))
@@ -53,7 +48,8 @@
 (defn read-object [is]
   (let [len (read-int is)
         arr (byte-array len)]
-    (read-all is arr)
+    (println "read-object(" len ")")
+    (read-fully is arr)
     (nippy/thaw arr)))
 
 (defn read-usercmd [is id]
@@ -66,6 +62,7 @@
 
 (defn write-object [^DataOutputStream os object]
   (let [^bytes arr (nippy/freeze object)]
+    (println "write-object(" (alength arr) ")")
     (.writeInt os (alength arr))
     (.write os arr)))
 

@@ -5,7 +5,7 @@
            [java.awt.event KeyEvent]))
 
 (def ^{:private true :tag String} SERVER_HOSTNAME "localhost")
-(def ^:private CANVAS_SIZE 500)
+(def ^:private CANVAS_SIZE 1000)
 (def ^:private UNIT_SIZE (/ CANVAS_SIZE (inc GAMEBOARD_SIZE)))
 
 (defn- welcome-painter [_ g]
