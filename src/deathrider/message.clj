@@ -39,42 +39,16 @@
 (defn get-data-input-stream [^Socket s]
   (DataInputStream. (.getInputStream s)))
 
-(defn read-fully [^DataInputStream is ^bytes arr]
-  (.readFully is arr))
-
-(defn read-int [^DataInputStream is]
-  (.readInt is))
-
-(defn read-object [is]
-  (let [len (read-int is)
-        arr (byte-array len)]
-    (println "read-object(" len ")")
-    (read-fully is arr)
-    (nippy/thaw arr)))
-
-(defn read-usercmd [is id]
-  (try
-    (read-object is)
-    (catch IOException _ (new-quit-usercmd id))))
-
-(defn write-int [^DataOutputStream os i]
-  (.writeInt os i))
-
-(defn write-object [^DataOutputStream os object]
-  (let [^bytes arr (nippy/freeze object)]
-    (println "write-object(" (alength arr) ")")
-    (.writeInt os (alength arr))
-    (.write os arr)))
-
-(defn flush-os [^OutputStream os]
+(defn flush-os! [^OutputStream os]
   (.flush os))
 
-(defn send-snapshot [outs gb]
-  (doseq [p (gameboard-players gb)]
-    (doto (nth outs (player-id p))
-      (write-object (new-snapshot (gameboard-players gb)))
-      flush-os)))
-
-(defn close-socket [^Socket s]
+(defn close-socket! [^Socket s]
   (.close s))
+
+(defn read-usercmd! [is id]
+  (try
+    (nippy/thaw-from-in! is)
+    (catch Throwable e
+      (.printStackTrace e)
+      (new-quit-usercmd id))))
 

@@ -1,6 +1,7 @@
 (ns deathrider.client
   (:use [seesaw core graphics]
         [deathrider config gameboard player point message])
+  (:require [taoensso.nippy :as nippy])
   (:import [java.net Socket]
            [java.awt.event KeyEvent]))
 
@@ -59,7 +60,7 @@
 
 (defn- reflect-snapshots [is cv]
   (loop []
-    (let [ss (read-object is)]
+    (let [ss (nippy/thaw-from-in! is)]
       (println ss)
       (config! cv :paint (painter (snapshot-players ss)))
       (repaint! cv)
@@ -71,7 +72,7 @@
       (let [sock (Socket. SERVER_HOSTNAME SERVER_PORT)
             is (get-data-input-stream sock)
             os (get-data-output-stream sock)
-            id (read-int is)]
+            id (nippy/thaw-from-in! is)]
         (listen (to-root cv) :key-pressed
           (fn [^KeyEvent e]
             (when-let [dir
@@ -81,8 +82,9 @@
                          KeyEvent/VK_LEFT :left
                          KeyEvent/VK_RIGHT :right
                          nil)]
-              (write-object os (new-turn-usercmd id dir))
-              (flush-os os))))
+              (println (new-turn-usercmd id dir))
+              (nippy/freeze-to-out! os (new-turn-usercmd id dir))
+              (flush-os! os))))
         (reflect-snapshots is cv))
       (catch java.io.IOException e
         (do

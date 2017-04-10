@@ -1,6 +1,7 @@
 (ns deathrider.server
   (:use [deathrider message gameboard player point config]
         [clojure.core.async :only [thread <!! >!! alts!! timeout]])
+  (:require [taoensso.nippy :as nippy])
   (:import [java.net ServerSocket]))
 
 (defn- rotate-point [p]
@@ -24,32 +25,38 @@
     (println gb)
 
     (dotimes [i len]
-      (write-int (nth outs i) i)
-      (flush-os (nth outs i)))
+      (nippy/freeze-to-out! (nth outs i) i)
+      (flush-os! (nth outs i)))
 
     (loop [moves {}
            gb gb
            to (timeout UPDATE_INTERVAL_MS)]
-      (let [chs (vec (conj (map #(thread (read-usercmd %1 %2))
+      (let [chs (vec (conj (map #(thread (read-usercmd! %1 %2))
                                 ins
                                 (range len))
                            to))
-            [val _] (alts!! chs :priority true)]
-        (println "Received: " val)
-        (println "Moves: " moves)
+            [msg _] (alts!! chs :priority true)]
         (cond
-          (nil? val)
+          (nil? msg)
           (let [new-gb (step gb moves)]
-            (send-snapshot outs new-gb) 
+            (doseq [p (gameboard-players gb) :when (alive? p)]
+              (doto (nth outs (player-id p))
+                (nippy/freeze-to-out! (new-snapshot (gameboard-players gb)))
+                flush-os!))
             (recur {} new-gb (timeout UPDATE_INTERVAL_MS)))
 
-          (= :quit (usercmd-type val))
-          (recur moves (mark-dead gb (usercmd-player-id val)) to)
+          (= :quit (usercmd-type msg))
+          (recur moves (mark-dead gb (usercmd-player-id msg)) to)
+
+          (= :turn (usercmd-type msg))
+          (recur (assoc moves (usercmd-player-id msg) (turn-dir msg))
+                 gb
+                 to)
 
           true
-          (recur (assoc moves (usercmd-player-id val) (turn-dir val))
-                 gb
-                 to))))))
+          (do
+            (println "Unknown usercmd" msg)
+            (recur moves gb to)))))))
 
 (defn start-server []
   (let [lsn (ServerSocket. SERVER_PORT)]
@@ -58,5 +65,5 @@
         (future
           (try (serve socks)
             (catch Throwable e (.printStackTrace e))
-            (finally (dorun (map close-socket socks)))))
+            (finally (dorun (map close-socket! socks)))))
         (recur)))))
