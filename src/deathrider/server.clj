@@ -36,6 +36,7 @@
                                 (range len))
                            to))
             [msg _] (alts!! chs :priority true)]
+        (println msg)
         (cond
           (nil? msg)
           (let [new-gb (step gb moves)]

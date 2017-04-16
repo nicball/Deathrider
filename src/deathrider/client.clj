@@ -73,6 +73,7 @@
             is (get-data-input-stream sock)
             os (get-data-output-stream sock)
             id (nippy/thaw-from-in! is)]
+        (println "id:" id)
         (listen (to-root cv) :key-pressed
           (fn [^KeyEvent e]
             (when-let [dir
@@ -87,6 +88,5 @@
               (flush-os! os))))
         (reflect-snapshots is cv))
       (catch java.io.IOException e
-        (do
-          (dispose! (to-root cv))
-          (.printStackTrace e))))))
+        (dispose! (to-root cv))
+        (.printStackTrace e)))))

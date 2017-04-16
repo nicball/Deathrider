@@ -10,18 +10,18 @@
            [java.net Socket]))
 
 (defn- new-usercmd [id ty data]
-  {:player-id id :type ty :data data})
+  {:player-id id :kind ty :data data})
 
 (defn usercmd-player-id [e] (:player-id e))
 
-(defn usercmd-type [e] (:type e))
+(defn usercmd-type [e] (:kind e))
 
 (defn new-turn-usercmd
   [id dir]
   (new-usercmd id :turn dir))
 
 (defn turn-dir [e]
-  (assert (= :turn (:type e)))
+  (assert (= :turn (:kind e)))
   (:data e))
 
 (defn new-quit-usercmd [id]
@@ -49,6 +49,7 @@
   (try
     (nippy/thaw-from-in! is)
     (catch Throwable e
-      (.printStackTrace e)
+      (when-not (instance? java.net.SocketException e)
+        (.printStackTrace e))
       (new-quit-usercmd id))))
 
