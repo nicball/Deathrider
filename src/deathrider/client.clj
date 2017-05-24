@@ -1,5 +1,6 @@
 (ns deathrider.client
   (:use [seesaw core graphics]
+        [clojure.core.async :only [thread chan put! alt!!]]
         [deathrider config gameboard player point message])
   (:require [taoensso.nippy :as nippy])
   (:import [java.net Socket]
@@ -58,21 +59,14 @@
     (paint-background g)
     (dorun (map #(paint-player g %) players))))
 
-(defn- reflect-snapshots [is cv]
-  (loop []
-    (let [ss (nippy/thaw-from-in! is)]
-      (println ss)
-      (config! cv :paint (painter (snapshot-players ss)))
-      (repaint! cv)
-      (recur))))
-
 (defn start-client []
   (let [cv (new-canvas)]
     (try
       (let [sock (Socket. SERVER_HOSTNAME SERVER_PORT)
             is (get-data-input-stream sock)
             os (get-data-output-stream sock)
-            id (nippy/thaw-from-in! is)]
+            id (nippy/thaw-from-in! is)
+            input-dir (chan)]
         (println "id:" id)
         (listen (to-root cv) :key-pressed
           (fn [^KeyEvent e]
@@ -83,10 +77,21 @@
                          KeyEvent/VK_LEFT :left
                          KeyEvent/VK_RIGHT :right
                          nil)]
-              (println (new-turn-usercmd id dir))
+              (put! input-dir dir))))
+        (loop [snapshots (thread (nippy/thaw-from-in! is))]
+          (alt!!
+            snapshots
+            ([ss]
+              (println ss)
+              (config! cv :paint (painter (snapshot-players ss)))
+              (repaint! cv)
+              (recur (thread (nippy/thaw-from-in! is))))
+
+            input-dir
+            ([dir]
               (nippy/freeze-to-out! os (new-turn-usercmd id dir))
-              (flush-os! os))))
-        (reflect-snapshots is cv))
+              (flush-os! os)
+              (recur snapshots)))))
       (catch java.io.IOException e
         (dispose! (to-root cv))
         (.printStackTrace e)))))
