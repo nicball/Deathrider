@@ -27,8 +27,8 @@
 (defn new-quit-usercmd [id]
   (new-usercmd id :quit nil))
 
-(defn new-snapshot [players]
-  {:players players})
+(defn new-snapshot [gb]
+  {:players (gameboard-players gb)})
 
 (defn snapshot-players [s]
   (:players s))
@@ -38,12 +38,6 @@
 
 (defn get-data-input-stream [^Socket s]
   (DataInputStream. (.getInputStream s)))
-
-(defn flush-os! [^OutputStream os]
-  (.flush os))
-
-(defn close-socket! [^Socket s]
-  (.close s))
 
 (defn read-usercmd! [is id]
   (try

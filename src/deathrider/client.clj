@@ -42,7 +42,7 @@
                (* UNIT_SIZE (+ 1 (- y) (long (/ GAMEBOARD_SIZE 2)))))))
 
 (defn- paint-player [g player]
-  (let [cl (get color-map (player-id player) :green)
+  (let [cl (if (alive? player) (get color-map (player-id player) :green) :grey)
         track (map to-screen-coord (player-track player))]
     (draw g (circle (point-x (first track))
                     (point-y (first track))
@@ -77,6 +77,7 @@
                          KeyEvent/VK_LEFT :left
                          KeyEvent/VK_RIGHT :right
                          nil)]
+              (println "KEY: " dir)
               (put! input-dir dir))))
         (loop [snapshots (thread (nippy/thaw-from-in! is))]
           (alt!!
@@ -89,8 +90,8 @@
 
             input-dir
             ([dir]
+              (println "Sending: " (new-turn-usercmd id dir))
               (nippy/freeze-to-out! os (new-turn-usercmd id dir))
-              (flush-os! os)
               (recur snapshots)))))
       (catch java.io.IOException e
         (dispose! (to-root cv))

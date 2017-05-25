@@ -1,8 +1,8 @@
 (ns deathrider.server
   (:use [deathrider message gameboard player point config]
-        [clojure.core.async :only [thread <!! >!! alts!! timeout]])
+        [clojure.core.async :only [thread chan <!! >!! alts!! timeout]])
   (:require [taoensso.nippy :as nippy])
-  (:import [java.net ServerSocket]))
+  (:import [java.net ServerSocket Socket]))
 
 (defn- rotate-point [p]
   (new-point (point-y p) (- (point-x p))))
@@ -13,6 +13,14 @@
         [pos dir] (rand-nth (map vector (iterate rotate-point p)
                                         [:up :right :down :left]))]
     (new-player id pos dir)))
+
+(defn- usercmd-reader-thread [in id]
+  (let [ch (chan)]
+    (thread
+      (loop []
+        (>!! ch (read-usercmd! in id))
+        (recur)))
+    ch))
 
 (def ^:private UPDATE_INTERVAL_MS (/ 1000 SNAPSHOT_PER_SEC))
 (defn serve [socks]
@@ -25,45 +33,46 @@
     (println gb)
 
     (dotimes [i len]
-      (nippy/freeze-to-out! (nth outs i) i)
-      (flush-os! (nth outs i)))
+      (nippy/freeze-to-out! (nth outs i) i))
+    (println "Player ids sent.")
 
-    (loop [moves {}
-           gb gb
-           to (timeout UPDATE_INTERVAL_MS)]
-      (let [chs (vec (conj (map #(thread (read-usercmd! %1 %2))
-                                ins
-                                (range len))
-                           to))
-            [msg _] (alts!! chs :priority true)]
-        (println msg)
-        (cond
-          (nil? msg)
-          (let [new-gb (step gb moves)]
-            (doseq [p (gameboard-players gb) :when (alive? p)]
-              (doto (nth outs (player-id p))
-                (nippy/freeze-to-out! (new-snapshot (gameboard-players gb)))
-                flush-os!))
-            (recur {} new-gb (timeout UPDATE_INTERVAL_MS)))
+    (let [msg-chans (doall (map usercmd-reader-thread ins (range len)))]
+      (loop [moves {}
+             gb gb
+             to (timeout UPDATE_INTERVAL_MS)]
+        (let [[msg _] (alts!! (conj msg-chans to) :priority true)]
+          (println msg)
+          (cond
+            (nil? msg)
+            (let [new-gb (step gb moves)]
+              (doseq [p (gameboard-players gb)]
+                (try (nippy/freeze-to-out! (nth outs (player-id p)) (new-snapshot gb)))
+                  (catch IOException _ nil))
+              (recur {} new-gb (timeout UPDATE_INTERVAL_MS)))
 
-          (= :quit (usercmd-type msg))
-          (recur moves (mark-dead gb (usercmd-player-id msg)) to)
+            (= :quit (usercmd-type msg))
+            (recur moves (mark-dead gb (usercmd-player-id msg)) to)
 
-          (= :turn (usercmd-type msg))
-          (recur (assoc moves (usercmd-player-id msg) (turn-dir msg))
-                 gb
-                 to)
+            (= :turn (usercmd-type msg))
+            (recur (assoc moves (usercmd-player-id msg) (turn-dir msg))
+                   gb
+                   to)
 
-          true
-          (do
-            (println "Unknown usercmd" msg)
-            (recur moves gb to)))))))
+            true
+            (do
+              (println "Unknown usercmd" msg)
+              (recur moves gb to))))))))
+
+(defn close-socket! [^Socket s]
+  (.close s))
 
 (defn start-server []
   (let [lsn (ServerSocket. SERVER_PORT)]
+    (println "Listening...")
     (loop []
       (let [socks (doall (repeatedly ROOM_SIZE #(.accept lsn)))]
         (future
+          (println "Starting new instance.")
           (try (serve socks)
             (catch Throwable e (.printStackTrace e))
             (finally (dorun (map close-socket! socks)))))
