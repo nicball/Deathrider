@@ -46,8 +46,8 @@
             (nil? msg)
             (let [new-gb (step gb moves)]
               (doseq [p (gameboard-players gb)]
-                (try (nippy/freeze-to-out! (nth outs (player-id p)) (new-snapshot gb)))
-                  (catch IOException _ nil))
+                (try (nippy/freeze-to-out! (nth outs (player-id p)) (new-snapshot gb))
+                  (catch java.io.IOException _ nil)))
               (recur {} new-gb (timeout UPDATE_INTERVAL_MS)))
 
             (= :quit (usercmd-type msg))

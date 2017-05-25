@@ -6,7 +6,6 @@
   (:import [java.net Socket]
            [java.awt.event KeyEvent]))
 
-(def ^{:private true :tag String} SERVER_HOSTNAME "localhost")
 (def ^:private CANVAS_SIZE 1000)
 (def ^:private UNIT_SIZE (/ CANVAS_SIZE (inc GAMEBOARD_SIZE)))
 
@@ -59,10 +58,10 @@
     (paint-background g)
     (dorun (map #(paint-player g %) players))))
 
-(defn start-client []
+(defn start-client [host]
   (let [cv (new-canvas)]
     (try
-      (let [sock (Socket. SERVER_HOSTNAME SERVER_PORT)
+      (let [sock (Socket. host SERVER_PORT)
             is (get-data-input-stream sock)
             os (get-data-output-stream sock)
             id (nippy/thaw-from-in! is)

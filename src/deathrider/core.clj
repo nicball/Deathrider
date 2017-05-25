@@ -5,5 +5,5 @@
 (defn -main
   [& args]
   (if (seq args)
-    (start-server)
-    (start-client)))
+    (start-client (first args))
+    (start-server)))
