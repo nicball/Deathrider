@@ -94,5 +94,4 @@
               (nippy/freeze-to-out! os (new-turn-usercmd id dir))
               (recur snapshots)))))
       (catch java.io.IOException e
-        (dispose! (to-root cv))
         (.printStackTrace e)))))
