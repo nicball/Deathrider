@@ -14,40 +14,45 @@
                                         [:up :right :down :left]))]
     (new-player id pos dir)))
 
-(defn- usercmd-reader-thread [in id]
+(defn- new-session [sock id]
+  {:socket sock
+   :player-id id
+   :in-stream (get-data-input-stream sock)
+   :out-stream (get-data-output-stream sock)})
+
+(defn- usercmd-reader-thread [s]
   (let [ch (chan)]
     (thread
       (loop []
-        (>!! ch (read-usercmd! in id))
+        (>!! ch (read-usercmd! (:in-stream s) (:player-id s)))
         (recur)))
     ch))
 
 (def ^:private UPDATE_INTERVAL_MS (/ 1000 SNAPSHOT_PER_SEC))
 (defn serve [socks]
   (let [len (count socks)
-        outs (doall (map get-data-output-stream socks))
-        ins (doall (map get-data-input-stream socks))
+        sessions (doall (map new-session socks (range len)))
         gb (collide (new-gameboard (map gen-player (range len))
                                    GAMEBOARD_SIZE
                                    GAMEBOARD_SIZE))]
     (println gb)
 
-    (dotimes [i len]
-      (nippy/freeze-to-out! (nth outs i) i))
+    (doseq [s sessions]
+      (nippy/freeze-to-out! (:player-id s) (:out-stream s)))
     (println "Player ids sent.")
 
-    (let [msg-chans (doall (map usercmd-reader-thread ins (range len)))]
+    (let [msg-chans (doall (map usercmd-reader-thread sessions))]
       (loop [moves {}
              gb gb
              to (timeout UPDATE_INTERVAL_MS)]
         (let [[msg _] (alts!! (conj msg-chans to) :priority true)]
-          (println msg)
           (cond
             (nil? msg)
             (let [new-gb (step gb moves)]
               (doseq [p (gameboard-players gb)]
                 (try (nippy/freeze-to-out! (nth outs (player-id p)) (new-snapshot gb))
-                  (catch java.io.IOException _ nil)))
+                  (catch java.io.IOException e
+                    (println "From serve::freeze-to-out!: " e))))
               (recur {} new-gb (timeout UPDATE_INTERVAL_MS)))
 
             (= :quit (usercmd-type msg))
@@ -57,6 +62,9 @@
             (recur (assoc moves (usercmd-player-id msg) (turn-dir msg))
                    gb
                    to)
+
+            (has-winner? gb)
+            nil
 
             true
             (do
@@ -72,8 +80,10 @@
     (loop []
       (let [socks (doall (repeatedly ROOM_SIZE #(.accept lsn)))]
         (future
-          (println "Starting new instance.")
+          (println "Opening new room.")
           (try (serve socks)
-            (catch Throwable e (.printStackTrace e))
-            (finally (dorun (map close-socket! socks)))))
+            (catch Throwable e 
+              (println "From start-server: " e))
+            (finally
+              (doseq [s socks] (close-socket! s)))))
         (recur)))))

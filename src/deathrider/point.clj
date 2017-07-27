@@ -21,7 +21,7 @@
 (defn update-y [p f]
   (update p :y f))
 
-(defn adjacent [p dir]
+(defn neighbor [p dir]
   (condp = dir
     :up (update-y p inc)
     :down (update-y p dec)

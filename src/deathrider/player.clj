@@ -33,11 +33,19 @@
         :up
         :down)
 
-      true
+      (== (point-y head)
+          (point-y neck))
       (if (> (point-x head)
              (point-x neck))
         :right
         :left))))
+
+(defn- opposite [dir]
+  (condp = dir
+    :up :down
+    :down :up
+    :left :right
+    :right :left))
 
 (defn ride
   ([player] (ride player (heading player)))
@@ -45,9 +53,10 @@
    (update player :track
      (fn [[head & tail]]
        (if (or (nil? dir)
-               (= dir (heading player)))
-         (conj tail (adjacent head (heading player)))
-         (conj tail head (adjacent head dir)))))))
+               (and (heading player)
+                    (= dir (opposite (heading player)))))
+         (conj tail (neighbor head (heading player)))
+         (conj tail head (neighbor head dir)))))))
 
 (defn die [player]
   (assoc player :status :dead))

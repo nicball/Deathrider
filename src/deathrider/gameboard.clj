@@ -20,6 +20,12 @@
     (or (> (Math/abs x) x-max)
         (> (Math/abs y) y-max))))
 
+(defn has-winner? [gb]
+  (let [survivers (filter alive? (gameboard-players gb))]
+    (if (== 1 (count survivers))
+      (first survivers)
+      nil)))
+
 (defn collide [gb]
   (with-players gb
     (for [p (:players gb)]
@@ -38,7 +44,7 @@
 
 (defn mark-dead [gb id]
   (with-players gb
-    (map (fn [p] (if (alive? p) (die p) p))
+    (map (fn [p] (if (= id (player-id p)) (die p) p))
          (:players gb))))
 
 (defn step [gb moves]

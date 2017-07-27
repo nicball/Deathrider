@@ -56,9 +56,10 @@
 (defn- painter [players]
   (fn [_ g]
     (paint-background g)
-    (dorun (map #(paint-player g %) players))))
+    (doseq [p players]
+      (paint-player g p))))
 
-(defn start-client [host]
+(defn start-client [^String host]
   (let [cv (new-canvas)]
     (try
       (let [sock (Socket. host SERVER_PORT)
