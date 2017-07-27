@@ -65,8 +65,7 @@
       (let [sock (Socket. host SERVER_PORT)
             is (get-data-input-stream sock)
             os (get-data-output-stream sock)
-            id (nippy/thaw-from-in! is)
-            input-dir (chan)]
+            id (nippy/thaw-from-in! is)]
         (println "id:" id)
         (listen (to-root cv) :key-pressed
           (fn [^KeyEvent e]
@@ -78,20 +77,14 @@
                          KeyEvent/VK_RIGHT :right
                          nil)]
               (println "KEY: " dir)
-              (put! input-dir dir))))
-        (loop [snapshots (thread (nippy/thaw-from-in! is))]
-          (alt!!
-            snapshots
-            ([ss]
-              (println ss)
-              (config! cv :paint (painter (snapshot-players ss)))
-              (repaint! cv)
-              (recur (thread (nippy/thaw-from-in! is))))
-
-            input-dir
-            ([dir]
               (println "Sending: " (new-turn-usercmd id dir))
               (nippy/freeze-to-out! os (new-turn-usercmd id dir))
-              (recur snapshots)))))
+              (flush-stream! os))))
+        (loop []
+          (let [ss (nippy/thaw-from-in! is)]
+            (println ss)
+            (config! cv :paint (painter (snapshot-players ss)))
+            (repaint! cv)
+            (recur))))
       (catch java.io.IOException e
         (.printStackTrace e)))))

@@ -39,6 +39,9 @@
 (defn get-data-input-stream [^Socket s]
   (DataInputStream. (.getInputStream s)))
 
+(defn flush-stream! [^OutputStream os]
+  (.flush os))
+
 (defn read-usercmd! [is id]
   (try
     (nippy/thaw-from-in! is)

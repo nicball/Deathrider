@@ -31,10 +31,10 @@
             (recur)))))
     ch))
 
-(defn- send-snapshot [ss id gb]
+(defn- find-alive-session [ss id]
   (let [s (first (drop-while #(not= id (:player-id %)) ss))]
     (when-not (:quited s)
-      (nippy/freeze-to-out! (:out-stream s) (new-snapshot gb)))))
+      s)))
 
 (defn- mark-quited [ss id]
   (map (fn [s]
@@ -42,6 +42,20 @@
            (assoc s :quited true)
            s))
        ss))
+
+(defn- enqueue-move [dir]
+  (fn [old-q]
+    (if-not (seq old-q)
+      [dir]
+      (conj old-q dir))))
+
+(defn- dequeue-everyone [move-queues]
+  (into {}
+    (for [[k v] move-queues] [k (vec (rest v))])))
+
+(defn- get-moves [move-queues]
+  (into {}
+    (for [[k v] move-queues] [k (first v)])))
 
 (def ^:private UPDATE_INTERVAL_MS (/ 1000 SNAPSHOT_PER_SEC))
 (defn serve [socks]
@@ -53,31 +67,35 @@
     (println gb)
 
     (doseq [s sessions]
-      (nippy/freeze-to-out! (:out-stream s) (:player-id s)))
+      (nippy/freeze-to-out! (:out-stream s) (:player-id s))
+      (flush-stream! (:out-stream s)))
     (println "Player ids sent.")
 
     (let [msg-chans (doall (map usercmd-reader-thread sessions))]
       (try
-        (loop [moves {}
+        (loop [move-queues {}
                gb gb
                to (timeout UPDATE_INTERVAL_MS)
                sessions sessions]
           (let [[msg _] (alts!! (conj msg-chans to) :priority true)]
             (cond
               (nil? msg)
-              (let [new-gb (step gb moves)]
+              (let [new-gb (step gb (get-moves move-queues))]
                 (doseq [p (gameboard-players gb)]
-                  (try (send-snapshot sessions (player-id p) gb)
+                  (try
+                    (when-let [s (find-alive-session sessions (player-id p))]
+                      (nippy/freeze-to-out! (:out-stream s) (new-snapshot gb))
+                      (flush-stream! (:out-stream s)))
                     (catch java.io.IOException e
                       (println "From serve::freeze-to-out!: " e))))
-                (recur {} new-gb (timeout UPDATE_INTERVAL_MS) sessions))
+                (recur (dequeue-everyone move-queues) new-gb (timeout UPDATE_INTERVAL_MS) sessions))
 
               (= :quit (usercmd-type msg))
-              (recur moves (mark-dead gb (usercmd-player-id msg)) to
+              (recur move-queues (mark-dead gb (usercmd-player-id msg)) to
                      (mark-quited sessions (usercmd-player-id msg)))
 
               (= :turn (usercmd-type msg))
-              (recur (assoc moves (usercmd-player-id msg) (turn-dir msg))
+              (recur (update move-queues (usercmd-player-id msg) (enqueue-move (turn-dir msg)))
                      gb to sessions)
 
               (or (has-winner? gb) (every? (complement alive?) (gameboard-players gb)))
@@ -86,7 +104,7 @@
               true
               (do
                 (println "Unknown usercmd" msg)
-                (recur moves gb to sessions)))))
+                (recur move-queues gb to sessions)))))
         (finally
           (doseq [c msg-chans]
             (close! c)))))))
