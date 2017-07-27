@@ -36,12 +36,12 @@
     (when-not (:quited s)
       (nippy/freeze-to-out! (:out-stream s) (new-snapshot gb)))))
 
-(defn- mark-quited! [ss id]
+(defn- mark-quited [ss id]
   (map (fn [s]
          (if (= id (:player-id s))
            (assoc s :quited true)
            s)
-       ss))
+       ss)))
 
 (def ^:private UPDATE_INTERVAL_MS (/ 1000 SNAPSHOT_PER_SEC))
 (defn serve [socks]
@@ -74,7 +74,7 @@
 
               (= :quit (usercmd-type msg))
               (recur moves (mark-dead gb (usercmd-player-id msg)) to
-                     (mark-quited sessions (usercmd-player-id msg))
+                     (mark-quited sessions (usercmd-player-id msg)))
 
               (= :turn (usercmd-type msg))
               (recur (assoc moves (usercmd-player-id msg) (turn-dir msg))
