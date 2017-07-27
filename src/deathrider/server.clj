@@ -1,6 +1,6 @@
 (ns deathrider.server
   (:use [deathrider message gameboard player point config]
-        [clojure.core.async :only [thread chan <!! >!! alts!! timeout]])
+        [clojure.core.async :only [thread chan close! <!! >!! alts!! timeout]])
   (:require [taoensso.nippy :as nippy])
   (:import [java.net ServerSocket Socket]))
 
@@ -18,15 +18,30 @@
   {:socket sock
    :player-id id
    :in-stream (get-data-input-stream sock)
-   :out-stream (get-data-output-stream sock)})
+   :out-stream (get-data-output-stream sock)
+   :quited false})
 
 (defn- usercmd-reader-thread [s]
   (let [ch (chan)]
     (thread
       (loop []
-        (>!! ch (read-usercmd! (:in-stream s) (:player-id s)))
-        (recur)))
+        (let [cmd (read-usercmd! (:in-stream s) (:player-id s))]
+          (>!! ch cmd)
+          (when-not (= :quit (usercmd-type cmd))
+            (recur)))))
     ch))
+
+(defn- send-snapshot [ss id gb]
+  (let [s (first (drop-while #(not= id (:player-id %)) ss))]
+    (when-not (:quited s)
+      (nippy/freeze-to-out! (:out-stream s) (new-snapshot gb)))))
+
+(defn- mark-quited! [ss id]
+  (map (fn [s]
+         (if (= id (:player-id s))
+           (assoc s :quited true)
+           s)
+       ss))
 
 (def ^:private UPDATE_INTERVAL_MS (/ 1000 SNAPSHOT_PER_SEC))
 (defn serve [socks]
@@ -38,38 +53,44 @@
     (println gb)
 
     (doseq [s sessions]
-      (nippy/freeze-to-out! (:player-id s) (:out-stream s)))
+      (nippy/freeze-to-out! (:out-stream s) (:player-id s)))
     (println "Player ids sent.")
 
     (let [msg-chans (doall (map usercmd-reader-thread sessions))]
-      (loop [moves {}
-             gb gb
-             to (timeout UPDATE_INTERVAL_MS)]
-        (let [[msg _] (alts!! (conj msg-chans to) :priority true)]
-          (cond
-            (nil? msg)
-            (let [new-gb (step gb moves)]
-              (doseq [p (gameboard-players gb)]
-                (try (nippy/freeze-to-out! (nth outs (player-id p)) (new-snapshot gb))
-                  (catch java.io.IOException e
-                    (println "From serve::freeze-to-out!: " e))))
-              (recur {} new-gb (timeout UPDATE_INTERVAL_MS)))
+      (try
+        (loop [moves {}
+               gb gb
+               to (timeout UPDATE_INTERVAL_MS)
+               sessions sessions]
+          (let [[msg _] (alts!! (conj msg-chans to) :priority true)]
+            (cond
+              (nil? msg)
+              (let [new-gb (step gb moves)]
+                (doseq [p (gameboard-players gb)]
+                  (try (send-snapshot sessions (player-id p) gb)
+                    (catch java.io.IOException e
+                      (println "From serve::freeze-to-out!: " e))))
+                (recur {} new-gb (timeout UPDATE_INTERVAL_MS) sessions))
 
-            (= :quit (usercmd-type msg))
-            (recur moves (mark-dead gb (usercmd-player-id msg)) to)
+              (= :quit (usercmd-type msg))
+              (recur moves (mark-dead gb (usercmd-player-id msg)) to
+                     (mark-quited sessions (usercmd-player-id msg))
 
-            (= :turn (usercmd-type msg))
-            (recur (assoc moves (usercmd-player-id msg) (turn-dir msg))
-                   gb
-                   to)
+              (= :turn (usercmd-type msg))
+              (recur (assoc moves (usercmd-player-id msg) (turn-dir msg))
+                     gb to sessions)
 
-            (has-winner? gb)
-            nil
+              (or (has-winner? gb) (every? (complement alive?) (gameboard-players gb)))
+              nil
 
-            true
-            (do
-              (println "Unknown usercmd" msg)
-              (recur moves gb to))))))))
+              true
+              (do
+                (println "Unknown usercmd" msg)
+                (recur moves gb to sessions)))))
+        (finally
+          (doseq [c msg-chans]
+            (close! c)))))))
+      
 
 (defn close-socket! [^Socket s]
   (.close s))
