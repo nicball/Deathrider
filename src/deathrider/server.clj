@@ -40,8 +40,8 @@
   (map (fn [s]
          (if (= id (:player-id s))
            (assoc s :quited true)
-           s)
-       ss)))
+           s))
+       ss))
 
 (def ^:private UPDATE_INTERVAL_MS (/ 1000 SNAPSHOT_PER_SEC))
 (defn serve [socks]
@@ -106,5 +106,6 @@
             (catch Throwable e 
               (println "From start-server: " e))
             (finally
-              (doseq [s socks] (close-socket! s)))))
+              (doseq [s socks] (close-socket! s))))
+          (println "Room closed."))
         (recur)))))
