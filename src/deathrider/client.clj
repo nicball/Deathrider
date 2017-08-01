@@ -10,8 +10,8 @@
 (def ^:private UNIT_SIZE (/ CANVAS_SIZE (inc GAMEBOARD_SIZE)))
 
 (defn- welcome-painter [_ g]
-  (draw g (string-shape 5 5 "正在连接服务器")
-          (style :foreground :white)))
+  (draw g (string-shape 20 20 "正在连接服务器")
+        (style :foreground :white)))
 
 (defn- new-canvas []
   (let [cv (canvas :background :black :paint welcome-painter
@@ -40,24 +40,29 @@
     (new-point (* UNIT_SIZE (+ 1 x (long (/ GAMEBOARD_SIZE 2))))
                (* UNIT_SIZE (+ 1 (- y) (long (/ GAMEBOARD_SIZE 2)))))))
 
-(defn- paint-player [g player]
-  (let [cl (if (alive? player) (get color-map (player-id player) :green) :grey)
+(defn- paint-player [g player my-id]
+  (let [cl (if (alive? player) (get color-map (player-id player) :green) :dimgrey)
         track (map to-screen-coord (player-track player))]
+    (when (= my-id (player-id player))
+      (draw g (circle (point-x (last track))
+                      (point-y (last track))
+                      10)
+            (style :foreground cl :background cl)))
     (draw g (circle (point-x (first track))
                     (point-y (first track))
                     10)
-            (style :foreground cl :background cl))
+          (style :foreground cl :background cl))
     (doseq [[start end] (map vector track (rest track))]
       (draw g
         (line (point-x start) (point-y start)
               (point-x end) (point-y end))
         (style :foreground cl :stroke 5)))))
 
-(defn- painter [players]
+(defn- painter [players my-id]
   (fn [_ g]
     (paint-background g)
     (doseq [p players]
-      (paint-player g p))))
+      (paint-player g p my-id))))
 
 (defn start-client [^String host]
   (let [cv (new-canvas)]
@@ -83,8 +88,12 @@
         (loop []
           (let [ss (nippy/thaw-from-in! is)]
             (println ss)
-            (config! cv :paint (painter (snapshot-players ss)))
+            (config! cv :paint (painter (snapshot-players ss) id))
             (repaint! cv)
             (recur))))
       (catch java.io.IOException e
-        (.printStackTrace e)))))
+        (.printStackTrace e)
+        (config! cv :paint 
+          (fn [_ g]
+            (draw g (string-shape 20 20 (.getMessage e))
+                  (style :foreground :white))))))))
